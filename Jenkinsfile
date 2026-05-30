@@ -1,14 +1,14 @@
 @Library('Shared') _
 pipeline {
-    agent {label 'Node'}
+    agent any
     
     environment{
         SONAR_HOME = tool "Sonar"
     }
     
     parameters {
-        string(name: 'FRONTEND_DOCKER_TAG', defaultValue: '', description: 'Setting docker image for latest push')
-        string(name: 'BACKEND_DOCKER_TAG', defaultValue: '', description: 'Setting docker image for latest push')
+        string(name: 'FRONTEND_DOCKER_TAG', defaultValue: '', description: 'Frontend Docker tag of the image built by the CI job')
+        string(name: 'BACKEND_DOCKER_TAG', defaultValue: '', description: 'Backend Docker tag of the image built by the CI job')
     }
     
     stages {
@@ -32,7 +32,7 @@ pipeline {
         stage('Git: Code Checkout') {
             steps {
                 script{
-                    code_checkout("https://github.com/LondheShubham153/Wanderlust-Mega-Project.git","main")
+                    code_checkout("https://github.com/Vishnu063/Wanderlust-Mega-Project1.git","main")
                 }
             }
         }
@@ -47,9 +47,8 @@ pipeline {
 
         stage("OWASP: Dependency check"){
             steps{
-                script{
-                    owasp_dependency()
-                }
+                dependencyCheck odcInstallation: 'OWASP Dependency Check', additionalArguments: '--scan ./ --format XML --out dependency-check-report.xml'
+                dependencyCheckPublisher pattern: 'dependency-check-report.xml'
             }
         }
         
@@ -96,13 +95,12 @@ pipeline {
         stage("Docker: Build Images"){
             steps{
                 script{
-                        dir('backend'){
-                            docker_build("wanderlust-backend-beta","${params.BACKEND_DOCKER_TAG}","trainwithshubham")
-                        }
-                    
-                        dir('frontend'){
-                            docker_build("wanderlust-frontend-beta","${params.FRONTEND_DOCKER_TAG}","trainwithshubham")
-                        }
+                    dir('backend'){
+                        docker_build("wanderlust-backend-beta","${params.BACKEND_DOCKER_TAG}","trainwithshubham")
+                    }
+                    dir('frontend'){
+                        docker_build("wanderlust-frontend-beta","${params.FRONTEND_DOCKER_TAG}","trainwithshubham")
+                    }
                 }
             }
         }
@@ -110,8 +108,17 @@ pipeline {
         stage("Docker: Push to DockerHub"){
             steps{
                 script{
-                    docker_push("wanderlust-backend-beta","${params.BACKEND_DOCKER_TAG}","trainwithshubham") 
-                    docker_push("wanderlust-frontend-beta","${params.FRONTEND_DOCKER_TAG}","trainwithshubham")
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )]) {
+                        sh '''
+                            echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+                            docker push trainwithshubham/wanderlust-backend-beta:${BACKEND_DOCKER_TAG}
+                            docker push trainwithshubham/wanderlust-frontend-beta:${FRONTEND_DOCKER_TAG}
+                        '''
+                    }
                 }
             }
         }
